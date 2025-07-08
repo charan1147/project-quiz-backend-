@@ -1,94 +1,100 @@
-// 📁 sockets/socket.js
-import { Server } from 'socket.io';
-import axios from 'axios';
-import dotenv from 'dotenv';
+import { Server } from "socket.io";
+import axios from "axios";
+import dotenv from "dotenv";
 
 dotenv.config();
 
 const API_KEY = process.env.QUIZ_API_KEY;
-const BASE_URL = 'https://quizapi.io/api/v1/questions';
+const BASE_URL = "https://quizapi.io/api/v1/questions";
 
 export const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: 'http://localhost:5173',
-      methods: ['GET', 'POST'],
+      origin: "http://localhost:5173",
+      methods: ["GET", "POST"],
       credentials: true,
     },
   });
 
   const rooms = new Map();
 
-  io.on('connection', (socket) => {
-    console.log('🔌 Client connected:', socket.id);
+  io.on("connection", (socket) => {
+    console.log("🔌 New client connected:", socket.id);
 
-    socket.on('joinRoom', async ({ roomId, username }) => {
-      let room = rooms.get(roomId);
-      if (!room) {
-        room = {
+    socket.on("leavePreviousRoom", () => {
+      for (const room of socket.rooms) {
+        if (room !== socket.id) {
+          socket.leave(room);
+        }
+      }
+    });
+
+    socket.on("createRoom", ({ roomId, username }) => {
+      if (!rooms.has(roomId)) {
+        rooms.set(roomId, {
           players: [],
           questions: [],
           scores: {},
           currentQuestion: 0,
           timer: null,
           answeredPlayers: new Set(),
-        };
-        rooms.set(roomId, room);
+          timeLeft: 15,
+          quizStarted: false,
+        });
+        console.log(`🏠 Room ${roomId} created`);
       }
+      joinRoom(socket, roomId, username);
+    });
 
-      if (room.players.length >= 2) {
-        socket.emit('roomFull');
+    socket.on("joinRoom", ({ roomId, username }) => {
+      if (!rooms.has(roomId)) {
+        socket.emit("quizError", "Room not found");
         return;
       }
+      joinRoom(socket, roomId, username);
+    });
 
-      const alreadyInRoom = room.players.find(p => p.username === username);
-      if (!alreadyInRoom) {
-        room.players.push({ id: socket.id, username });
-        room.scores[username] = 0;
-      }
-      socket.join(roomId);
-
-      io.to(roomId).emit('playerUpdate', { players: room.players, roomId });
-
-      if (room.players.length === 2) {
+    socket.on("startQuizManually", async ({ roomId }) => {
+      const room = rooms.get(roomId);
+      if (room && !room.quizStarted) {
         await startQuiz(io, roomId, room);
       }
     });
 
-    socket.on('rejoinRoom', ({ roomId, username }) => {
+    socket.on("rejoinRoom", ({ roomId, username }) => {
       const room = rooms.get(roomId);
-      if (!room) {
-        socket.emit("quizError", "Room not found.");
-        return;
-      }
+      if (!room) return;
 
-      const existing = room.players.find(p => p.username === username);
+      const existing = room.players.find((p) => p.username === username);
       if (!existing) {
         room.players.push({ id: socket.id, username });
         room.scores[username] = 0;
+      } else {
+        existing.id = socket.id; // Update socket ID if reconnected
       }
 
       socket.join(roomId);
-      io.to(roomId).emit('playerUpdate', { players: room.players, roomId });
+      socket.emit("scoreUpdate", room.scores);
+      io.to(roomId).emit("playerUpdate", { players: room.players, roomId });
 
       const currentQ = room.questions[room.currentQuestion];
-      if (currentQ) {
+      if (room.quizStarted && currentQ) {
         socket.emit("startQuiz", {
           question: currentQ,
           currentQuestion: room.currentQuestion + 1,
           totalQuestions: room.questions.length,
-          timeLeft: currentQ.timer,
+          timeLeft: room.timeLeft,
         });
-        socket.emit("scoreUpdate", room.scores);
       }
     });
 
-    socket.on('submitAnswer', ({ roomId, answer, timeTaken }) => {
+    socket.on("submitAnswer", ({ roomId, answer, timeTaken }) => {
       const room = rooms.get(roomId);
       if (!room || !room.timer) return;
 
-      const player = room.players.find(p => p.id === socket.id);
+      const player = room.players.find((p) => p.id === socket.id);
       if (!player || room.answeredPlayers.has(player.username)) return;
+
       room.answeredPlayers.add(player.username);
 
       const currentQuestion = room.questions[room.currentQuestion];
@@ -96,104 +102,134 @@ export const initializeSocket = (server) => {
 
       if (isCorrect) {
         const timeBonus = Math.max(0, 10 - Math.floor(timeTaken / 1000));
-        room.scores[player.username] = (room.scores[player.username] || 0) + 10 + timeBonus;
+        room.scores[player.username] =
+          (room.scores[player.username] || 0) + 10 + timeBonus;
       }
 
-      io.to(roomId).emit('scoreUpdate', room.scores);
+      io.to(roomId).emit("scoreUpdate", room.scores);
 
-      const allAnswered = room.players.every(p => room.answeredPlayers.has(p.username));
+      const allAnswered = room.players.every((p) =>
+        room.answeredPlayers.has(p.username)
+      );
 
       if (allAnswered) {
         clearInterval(room.timer);
-        if (room.currentQuestion < room.questions.length - 1) {
-          room.currentQuestion++;
-          startQuestionTimer(io, roomId, room);
-        } else {
-          io.to(roomId).emit('quizEnd', { scores: room.scores });
-          rooms.delete(roomId);
-        }
+        goToNextQuestion(io, roomId, room);
       }
     });
 
-    socket.on('sendMessage', ({ roomId, message, username }) => {
-      io.to(roomId).emit('receiveMessage', {
+    socket.on("sendMessage", ({ roomId, message, username }) => {
+      io.to(roomId).emit("receiveMessage", {
         username,
         message,
         timestamp: new Date(),
       });
     });
 
-    socket.on('disconnect', () => {
-      console.log('❌ Client disconnected:', socket.id);
-      rooms.forEach((room, roomId) => {
-        const index = room.players.findIndex(p => p.id === socket.id);
+    socket.on("disconnect", () => {
+      console.log("❌ Client disconnected:", socket.id);
+      for (const [roomId, room] of rooms.entries()) {
+        const index = room.players.findIndex((p) => p.id === socket.id);
         if (index !== -1) {
           const username = room.players[index].username;
           room.players.splice(index, 1);
           delete room.scores[username];
-          io.to(roomId).emit('playerUpdate', { players: room.players, roomId });
-          if (room.players.length === 0) {
-            clearInterval(room.timer);
-            rooms.delete(roomId);
-          }
+          io.to(roomId).emit("playerUpdate", {
+            players: room.players,
+            roomId,
+          });
         }
-      });
+        if (room.players.length === 0) {
+          clearInterval(room.timer);
+          rooms.delete(roomId);
+        }
+      }
     });
   });
 
-  const startQuiz = async (io, roomId, room) => {
-    const questions = await fetchQuestions();
-    if (!questions.length) {
-      io.to(roomId).emit('quizError', 'No questions available.');
+  const joinRoom = (socket, roomId, username) => {
+    const room = rooms.get(roomId);
+    if (room.players.length >= 10) {
+      socket.emit("roomFull");
       return;
     }
+
+    const existing = room.players.find((p) => p.username === username);
+    if (!existing) {
+      room.players.push({ id: socket.id, username });
+      room.scores[username] = 0;
+    } else {
+      existing.id = socket.id;
+    }
+
+    socket.join(roomId);
+    io.to(roomId).emit("playerUpdate", { players: room.players, roomId });
+  };
+
+  const startQuiz = async (io, roomId, room) => {
+    const questions = await fetchQuestions(10);
+    if (!questions.length) {
+      io.to(roomId).emit("quizError", "No questions available.");
+      return;
+    }
+
     room.questions = questions;
+    room.currentQuestion = 0;
+    room.quizStarted = true;
     startQuestionTimer(io, roomId, room);
   };
 
   const startQuestionTimer = (io, roomId, room) => {
     const question = room.questions[room.currentQuestion];
-    question.timer = 15;
+    room.timeLeft = 15;
     room.answeredPlayers = new Set();
 
-    io.to(roomId).emit('startQuiz', {
+    io.to(roomId).emit("startQuiz", {
       question,
       currentQuestion: room.currentQuestion + 1,
       totalQuestions: room.questions.length,
-      timeLeft: question.timer,
+      timeLeft: room.timeLeft,
     });
 
     room.timer = setInterval(() => {
-      question.timer--;
-      io.to(roomId).emit('timerUpdate', { timeLeft: question.timer });
+      room.timeLeft--;
+      io.to(roomId).emit("timerUpdate", { timeLeft: room.timeLeft });
 
-      if (question.timer <= 0) {
+      if (room.timeLeft <= 0) {
         clearInterval(room.timer);
-        if (room.currentQuestion < room.questions.length - 1) {
-          room.currentQuestion++;
-          startQuestionTimer(io, roomId, room);
-        } else {
-          io.to(roomId).emit('quizEnd', { scores: room.scores });
-          rooms.delete(roomId);
-        }
+        goToNextQuestion(io, roomId, room);
       }
     }, 1000);
   };
 
-  const fetchQuestions = async () => {
+  const goToNextQuestion = (io, roomId, room) => {
+    if (room.currentQuestion < room.questions.length - 1) {
+      room.currentQuestion++;
+      startQuestionTimer(io, roomId, room);
+    } else {
+      io.to(roomId).emit("quizEnd", { scores: room.scores });
+      clearInterval(room.timer);
+      rooms.delete(roomId);
+    }
+  };
+
+  const fetchQuestions = async (limit = 10) => {
     try {
-      const response = await axios.get(BASE_URL, {
+      const res = await axios.get(BASE_URL, {
         params: {
           apiKey: API_KEY,
-          limit: 5,
-          type: 'multiple',
+          limit,
+          difficulty: "Medium",
+          type: "multiple",
         },
       });
 
-      return response.data.map(q => {
+      return res.data.map((q) => {
         const options = Object.values(q.answers).filter(Boolean);
-        const correctKey = Object.keys(q.correct_answers).find(key => q.correct_answers[key] === 'true');
-        const answerKey = correctKey?.replace('_correct', '');
+        const correctKey = Object.keys(q.correct_answers).find(
+          (k) => q.correct_answers[k] === "true"
+        );
+        const answerKey = correctKey?.replace("_correct", "");
         const correctAnswer = q.answers[answerKey];
 
         return {
@@ -204,7 +240,7 @@ export const initializeSocket = (server) => {
         };
       });
     } catch (err) {
-      console.error('❌ Error fetching questions:', err);
+      console.error("❌ Error fetching questions:", err.message);
       return [];
     }
   };
