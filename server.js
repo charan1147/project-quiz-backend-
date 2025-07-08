@@ -1,4 +1,3 @@
-// 📁 server.js
 import express from "express";
 import dotenv from "dotenv";
 import http from "http";
@@ -14,19 +13,15 @@ connectDB();
 
 const app = express();
 const server = http.createServer(app);
-
-// Initialize Socket.io
 initializeSocket(server);
 
 app.use(express.json());
 app.use(cookieParser());
-
 app.use(cors({
   origin: ["http://localhost:5173", "https://your-frontend.netlify.app"],
   credentials: true,
 }));
 
-// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
