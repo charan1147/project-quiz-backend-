@@ -27,19 +27,33 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   const { identifier, password } = req.body;
+  console.log("🔑 Login request for:", identifier);
+
   try {
     const user = await User.findOne({
       $or: [{ username: identifier }, { email: identifier }],
     });
-    if (!user || !(await bcrypt.compare(password, user.password)))
-      return res.status(401).json({ message: "Invalid username/email or password" });
 
+    if (!user) {
+      console.log("❌ User not found");
+      return res.status(401).json({ message: "Invalid username/email or password" });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      console.log("❌ Incorrect password");
+      return res.status(401).json({ message: "Invalid username/email or password" });
+    }
+
+    console.log("✅ Credentials valid, generating token...");
     generateToken(user, res);
     res.status(200).json({ message: "Login successful" });
   } catch (error) {
+    console.error(" Login error:", error);
     res.status(500).json({ message: "Login failed" });
   }
 };
+
 
 export const logout = async (req, res) => {
   try {
