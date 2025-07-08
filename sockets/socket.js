@@ -1,4 +1,4 @@
-
+// 📁 sockets/socket.js
 import { Server } from 'socket.io';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -20,7 +20,7 @@ export const initializeSocket = (server) => {
   const rooms = new Map();
 
   io.on('connection', (socket) => {
-    console.log('New client connected:', socket.id);
+    console.log('🔌 Client connected:', socket.id);
 
     socket.on('joinRoom', async ({ roomId, username }) => {
       let room = rooms.get(roomId);
@@ -41,8 +41,11 @@ export const initializeSocket = (server) => {
         return;
       }
 
-      room.players.push({ id: socket.id, username });
-      room.scores[username] = 0;
+      const alreadyInRoom = room.players.find(p => p.username === username);
+      if (!alreadyInRoom) {
+        room.players.push({ id: socket.id, username });
+        room.scores[username] = 0;
+      }
       socket.join(roomId);
 
       io.to(roomId).emit('playerUpdate', { players: room.players, roomId });
@@ -63,8 +66,6 @@ export const initializeSocket = (server) => {
       if (!existing) {
         room.players.push({ id: socket.id, username });
         room.scores[username] = 0;
-      } else {
-        existing.id = socket.id;
       }
 
       socket.join(roomId);
@@ -82,26 +83,25 @@ export const initializeSocket = (server) => {
       }
     });
 
-    socket.on('submitAnswer', ({ roomId, answer, timeTaken, username }) => {
+    socket.on('submitAnswer', ({ roomId, answer, timeTaken }) => {
       const room = rooms.get(roomId);
       if (!room || !room.timer) return;
 
-      if (room.answeredPlayers.has(username)) return;
-      room.answeredPlayers.add(username);
+      const player = room.players.find(p => p.id === socket.id);
+      if (!player || room.answeredPlayers.has(player.username)) return;
+      room.answeredPlayers.add(player.username);
 
       const currentQuestion = room.questions[room.currentQuestion];
       const isCorrect = answer === currentQuestion.correct_answer;
 
       if (isCorrect) {
         const timeBonus = Math.max(0, 10 - Math.floor(timeTaken / 1000));
-        room.scores[username] = (room.scores[username] || 0) + 10 + timeBonus;
+        room.scores[player.username] = (room.scores[player.username] || 0) + 10 + timeBonus;
       }
 
       io.to(roomId).emit('scoreUpdate', room.scores);
 
-      const allAnswered = room.players.every(player =>
-        room.answeredPlayers.has(player.username)
-      );
+      const allAnswered = room.players.every(p => room.answeredPlayers.has(p.username));
 
       if (allAnswered) {
         clearInterval(room.timer);
@@ -124,7 +124,7 @@ export const initializeSocket = (server) => {
     });
 
     socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id);
+      console.log('❌ Client disconnected:', socket.id);
       rooms.forEach((room, roomId) => {
         const index = room.players.findIndex(p => p.id === socket.id);
         if (index !== -1) {
@@ -190,30 +190,21 @@ export const initializeSocket = (server) => {
         },
       });
 
-      if (!Array.isArray(response.data) || response.data.length === 0) {
-        console.error('QuizAPI returned no questions.');
-        return [];
-      }
-
-      return response.data.map((q) => {
-        const allAnswers = Object.values(q.answers).filter((ans) => ans !== null);
-
-        const correctKey = Object.keys(q.correct_answers).find(
-          (key) => q.correct_answers[key] === 'true'
-        );
-
+      return response.data.map(q => {
+        const options = Object.values(q.answers).filter(Boolean);
+        const correctKey = Object.keys(q.correct_answers).find(key => q.correct_answers[key] === 'true');
         const answerKey = correctKey?.replace('_correct', '');
         const correctAnswer = q.answers[answerKey];
 
         return {
           question: q.question,
-          options: allAnswers.sort(() => Math.random() - 0.5),
+          options: options.sort(() => Math.random() - 0.5),
           correct_answer: correctAnswer,
           timer: 15,
         };
       });
-    } catch (error) {
-      console.error('Error fetching questions:', error);
+    } catch (err) {
+      console.error('❌ Error fetching questions:', err);
       return [];
     }
   };
