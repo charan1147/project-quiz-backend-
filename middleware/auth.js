@@ -3,19 +3,17 @@ import { verifyToken } from "../config/token.js";
 
 export const auth = (req, res, next) => {
   try {
-    // Parse cookies from request
-    const cookies = cookie.parse(req.headers.cookie || "");
-
-    // Extract JWT token from cookies
+    const cookies = cookie.parse(req?.headers?.cookie || "");
     const token = cookies.jwt;
+
     if (!token) {
-      return res.status(401).json({ message: "No token provided" });
+      console.warn("🚫 No JWT token found in cookies");
+      return res.status(401).json({ message: "Not authenticated" });
     }
 
-    // Verify and decode token
     const decoded = verifyToken(token);
-    req.user = decoded; // Attach user data to request
-    next(); // Proceed to next middleware or route
+    req.user = decoded; // You can access user info via req.user later
+    next();
   } catch (error) {
     console.error("❌ Auth error:", error.message);
     res.status(401).json({ message: "Invalid or expired token" });

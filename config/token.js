@@ -1,6 +1,7 @@
 import cookie from "cookie";
 import jwt from "jsonwebtoken";
 
+
 export const generateToken = (user, res) => {
   const token = jwt.sign(
     { id: user._id, username: user.username },
@@ -8,27 +9,22 @@ export const generateToken = (user, res) => {
     { expiresIn: "1d" }
   );
 
-  res.setHeader(
-    "Set-Cookie",
-    cookie.serialize("jwt", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production", 
-      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", 
-      maxAge: 60 * 60 * 24, 
-      path: "/",
-    })
-  );
+  res.setHeader("Set-Cookie", cookie.serialize("jwt", token, {
+    httpOnly: true,
+    secure: true, 
+    sameSite: "none", 
+    maxAge: 60 * 60 * 24, 
+    path: "/",
+  }));
 
   return token;
 };
 
-
 export const verifyToken = (token) => {
-  if (!token) throw new Error('No token provided');
+  if (!token) throw new Error("No token provided");
   try {
     return jwt.verify(token, process.env.JWT_SECRET);
   } catch (error) {
-    throw new Error('Invalid token');
+    throw new Error("Invalid token");
   }
 };
-
