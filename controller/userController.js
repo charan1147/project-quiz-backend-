@@ -3,7 +3,6 @@ import { generateToken, verifyToken } from "../config/token.js";
 import User from "../models/userModel.js";
 import cookie from "cookie";
 
-
 export const register = async (req, res) => {
   const { username, email, password } = req.body;
 
@@ -32,7 +31,6 @@ export const register = async (req, res) => {
   }
 };
 
-
 export const login = async (req, res) => {
   const { identifier, password } = req.body;
 
@@ -53,19 +51,15 @@ export const login = async (req, res) => {
   }
 };
 
-
 export const logout = async (req, res) => {
   try {
-    res.setHeader(
-      "Set-Cookie",
-      cookie.serialize("jwt", "", {
-        httpOnly: true,
-        maxAge: 0,
-        path: "/",
-        sameSite: "strict",
-        secure: process.env.NODE_ENV === "production",
-      })
-    );
+    res.setHeader("Set-Cookie", cookie.serialize("jwt", "", {
+      httpOnly: true,
+      maxAge: 0,
+      path: "/",
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    }));
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
     console.error(" Logout error:", error);
@@ -73,14 +67,18 @@ export const logout = async (req, res) => {
   }
 };
 
-
 export const profile = async (req, res) => {
   try {
     const cookies = cookie.parse(req.headers.cookie || "");
     const token = cookies.jwt;
-    const decoded = verifyToken(token);
 
+    if (!token) {
+      return res.status(401).json({ message: "No token provided" });
+    }
+
+    const decoded = verifyToken(token);
     const user = await User.findById(decoded.id).select("-password");
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }

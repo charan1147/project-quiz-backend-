@@ -7,6 +7,5 @@ const matchSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
 });
 
-const Match=mongoose.model("Match",matchSchema)
-
-export default Match
+const Match = mongoose.model("Match", matchSchema);
+export default Match;

@@ -1,7 +1,6 @@
 import cookie from "cookie";
 import jwt from "jsonwebtoken";
 
-
 export const generateToken = (user, res) => {
   const token = jwt.sign(
     { id: user._id, username: user.username },
@@ -11,9 +10,9 @@ export const generateToken = (user, res) => {
 
   res.setHeader("Set-Cookie", cookie.serialize("jwt", token, {
     httpOnly: true,
-    secure: true, 
-    sameSite: "none", 
-    maxAge: 60 * 60 * 24, 
+    secure: process.env.NODE_ENV === "production", // use true only in production (HTTPS)
+    sameSite: "none",
+    maxAge: 60 * 60 * 24,
     path: "/",
   }));
 

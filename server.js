@@ -1,38 +1,40 @@
+// 📁 server.js
 import express from "express";
+import dotenv from "dotenv";
+import http from "http";
+import connectDB from "./config/db.js";
+import cookieParser from "cookie-parser";
 import cors from "cors";
-import cookieParser from "cookie-parser"; 
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import { initializeSocket } from "./sockets/socket.js";
-import connectDB from "./config/db.js";
-import dotenv from "dotenv";
 
 dotenv.config();
+connectDB();
 
 const app = express();
+const server = http.createServer(app);
 
-const CLIENT_ORIGIN = process.env.NODE_ENV === "production"
-  ? "https://your-frontend.onrender.com"
-  : "http://localhost:5173";
+// Initialize Socket.io
+initializeSocket(server);
+
+app.use(express.json());
+app.use(cookieParser());
 
 app.use(cors({
-  origin: CLIENT_ORIGIN,
+  origin: ["http://localhost:5173", "https://your-frontend.netlify.app"],
   credentials: true,
 }));
 
-app.use(express.json());
-app.use(cookieParser()); 
-
-connectDB();
-
-
+// API Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
-const PORT = process.env.PORT || 4000;
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+app.get("/", (req, res) => {
+  res.send("🎉 Quiz App API & WebSocket server is running...");
 });
 
-
-initializeSocket(server);
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+});
