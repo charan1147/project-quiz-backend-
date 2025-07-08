@@ -1,3 +1,4 @@
+
 import { Server } from 'socket.io';
 import axios from 'axios';
 import dotenv from 'dotenv';
@@ -41,7 +42,7 @@ export const initializeSocket = (server) => {
       }
 
       room.players.push({ id: socket.id, username });
-      room.scores[socket.id] = 0;
+      room.scores[username] = 0;
       socket.join(roomId);
 
       io.to(roomId).emit('playerUpdate', { players: room.players, roomId });
@@ -58,10 +59,12 @@ export const initializeSocket = (server) => {
         return;
       }
 
-      const existing = room.players.find(p => p.id === socket.id);
+      const existing = room.players.find(p => p.username === username);
       if (!existing) {
         room.players.push({ id: socket.id, username });
-        room.scores[socket.id] = 0;
+        room.scores[username] = 0;
+      } else {
+        existing.id = socket.id;
       }
 
       socket.join(roomId);
@@ -79,24 +82,26 @@ export const initializeSocket = (server) => {
       }
     });
 
-    socket.on('submitAnswer', ({ roomId, answer, timeTaken }) => {
+    socket.on('submitAnswer', ({ roomId, answer, timeTaken, username }) => {
       const room = rooms.get(roomId);
       if (!room || !room.timer) return;
 
-      if (room.answeredPlayers.has(socket.id)) return;
-      room.answeredPlayers.add(socket.id);
+      if (room.answeredPlayers.has(username)) return;
+      room.answeredPlayers.add(username);
 
       const currentQuestion = room.questions[room.currentQuestion];
       const isCorrect = answer === currentQuestion.correct_answer;
 
       if (isCorrect) {
         const timeBonus = Math.max(0, 10 - Math.floor(timeTaken / 1000));
-        room.scores[socket.id] = (room.scores[socket.id] || 0) + 10 + timeBonus;
+        room.scores[username] = (room.scores[username] || 0) + 10 + timeBonus;
       }
 
       io.to(roomId).emit('scoreUpdate', room.scores);
 
-      const allAnswered = room.players.every(player => room.answeredPlayers.has(player.id));
+      const allAnswered = room.players.every(player =>
+        room.answeredPlayers.has(player.username)
+      );
 
       if (allAnswered) {
         clearInterval(room.timer);
@@ -121,11 +126,12 @@ export const initializeSocket = (server) => {
     socket.on('disconnect', () => {
       console.log('Client disconnected:', socket.id);
       rooms.forEach((room, roomId) => {
-        const playerIndex = room.players.findIndex(p => p.id === socket.id);
-        if (playerIndex !== -1) {
-          room.players.splice(playerIndex, 1);
-          delete room.scores[socket.id];
-          io.to(roomId).emit('playerUpdate', room.players);
+        const index = room.players.findIndex(p => p.id === socket.id);
+        if (index !== -1) {
+          const username = room.players[index].username;
+          room.players.splice(index, 1);
+          delete room.scores[username];
+          io.to(roomId).emit('playerUpdate', { players: room.players, roomId });
           if (room.players.length === 0) {
             clearInterval(room.timer);
             rooms.delete(roomId);
