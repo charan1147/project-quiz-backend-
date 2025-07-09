@@ -15,40 +15,45 @@ const app = express();
 const server = http.createServer(app);
 initializeSocket(server);
 
+// ✅ SAFER origin checking without trailing slash
 const allowedOrigins = [
   "https://app-like-quiz.netlify.app",
   "http://localhost:5173"
 ];
 
+// ✅ CORS logging
 app.use((req, res, next) => {
-  console.log(" Incoming request from:", req.headers.origin);
+  console.log("🌐 Incoming request from:", req.headers.origin);
   next();
 });
 
+// ✅ Use CORS before any route handlers
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error(" CORS blocked for origin:", origin);
+      console.error("❌ CORS blocked for origin:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
 }));
 
-app.options("*", cors());
-
+// ✅ Add these BEFORE routes
 app.use(express.json());
 app.use(cookieParser());
+
+// ✅ Use routes
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
+// ✅ Root route
 app.get("/", (req, res) => {
   res.send("Quiz App API & WebSocket server is running...");
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`Server listening on http://localhost:${PORT}`);
+  console.log(`🚀 Server listening on http://localhost:${PORT}`);
 });
