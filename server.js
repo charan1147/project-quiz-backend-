@@ -18,7 +18,7 @@ initializeSocket(server);
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: ["http://localhost:5173", "https://your-frontend.netlify.app"],
+  origin: [ process.env.CLIENT_URL||"http://localhost:5173"],
   credentials: true,
 }));
 
@@ -26,10 +26,10 @@ app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
 app.get("/", (req, res) => {
-  res.send("🎉 Quiz App API & WebSocket server is running...");
+  res.send(" Quiz App API & WebSocket server is running...");
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server listening on http://localhost:${PORT}`);
+  console.log(` Server listening on http://localhost:${PORT}`);
 });
