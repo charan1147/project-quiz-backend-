@@ -19,7 +19,7 @@ export const initializeSocket = (server) => {
   const rooms = new Map();
 
   io.on("connection", (socket) => {
-    console.log("🔌 New client connected:", socket.id);
+    console.log(" New client connected:", socket.id);
 
     socket.on("leavePreviousRoom", () => {
       for (const room of socket.rooms) {
@@ -40,6 +40,7 @@ export const initializeSocket = (server) => {
           answeredPlayers: new Set(),
           timeLeft: 15,
           quizStarted: false,
+          chat: [], 
         });
         console.log(`🏠 Room ${roomId} created`);
       }
@@ -54,13 +55,6 @@ export const initializeSocket = (server) => {
       joinRoom(socket, roomId, username);
     });
 
-    socket.on("startQuizManually", async ({ roomId }) => {
-      const room = rooms.get(roomId);
-      if (room && !room.quizStarted) {
-        await startQuiz(io, roomId, room);
-      }
-    });
-
     socket.on("rejoinRoom", ({ roomId, username }) => {
       const room = rooms.get(roomId);
       if (!room) return;
@@ -70,10 +64,15 @@ export const initializeSocket = (server) => {
         room.players.push({ id: socket.id, username });
         room.scores[username] = 0;
       } else {
-        existing.id = socket.id; // Update socket ID if reconnected
+        existing.id = socket.id;
       }
 
       socket.join(roomId);
+
+      room.chat.forEach((msg) => {
+        socket.emit("receiveMessage", msg);
+      });
+
       socket.emit("scoreUpdate", room.scores);
       io.to(roomId).emit("playerUpdate", { players: room.players, roomId });
 
@@ -85,6 +84,13 @@ export const initializeSocket = (server) => {
           totalQuestions: room.questions.length,
           timeLeft: room.timeLeft,
         });
+      }
+    });
+
+    socket.on("startQuizManually", async ({ roomId }) => {
+      const room = rooms.get(roomId);
+      if (room && !room.quizStarted) {
+        await startQuiz(io, roomId, room);
       }
     });
 
@@ -119,15 +125,23 @@ export const initializeSocket = (server) => {
     });
 
     socket.on("sendMessage", ({ roomId, message, username }) => {
-      io.to(roomId).emit("receiveMessage", {
+      const room = rooms.get(roomId);
+      if (!room) return;
+
+      const msg = {
         username,
         message,
         timestamp: new Date(),
-      });
+      };
+      room.chat.push(msg);
+
+      if (room.chat.length > 100) room.chat.shift();
+
+      io.to(roomId).emit("receiveMessage", msg);
     });
 
     socket.on("disconnect", () => {
-      console.log("❌ Client disconnected:", socket.id);
+      console.log("Client disconnected:", socket.id);
       for (const [roomId, room] of rooms.entries()) {
         const index = room.players.findIndex((p) => p.id === socket.id);
         if (index !== -1) {
@@ -139,9 +153,16 @@ export const initializeSocket = (server) => {
             roomId,
           });
         }
+
         if (room.players.length === 0) {
           clearInterval(room.timer);
-          rooms.delete(roomId);
+
+          setTimeout(() => {
+            if (room.players.length === 0) {
+              console.log(`🧹 Room ${roomId} cleaned`);
+              rooms.delete(roomId);
+            }
+          }, 10 * 60 * 1000);
         }
       }
     });
@@ -209,7 +230,9 @@ export const initializeSocket = (server) => {
     } else {
       io.to(roomId).emit("quizEnd", { scores: room.scores });
       clearInterval(room.timer);
-      rooms.delete(roomId);
+      setTimeout(() => {
+        rooms.delete(roomId);
+      }, 10 * 60 * 1000);
     }
   };
 
@@ -240,7 +263,7 @@ export const initializeSocket = (server) => {
         };
       });
     } catch (err) {
-      console.error("❌ Error fetching questions:", err.message);
+      console.error("Error fetching questions:", err.message);
       return [];
     }
   };
