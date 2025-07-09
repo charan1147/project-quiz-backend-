@@ -17,9 +17,10 @@ initializeSocket(server);
 
 app.use(express.json());
 app.use(cookieParser());
+
 const allowedOrigins = [
-  process.env.CLIENT_URL, 
-  "http://localhost:5173/"
+  process.env.CLIENT_URL,
+  "http://localhost:5173"
 ];
 
 app.use(cors({
@@ -32,6 +33,7 @@ app.use(cors({
   },
   credentials: true,
 }));
+
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
