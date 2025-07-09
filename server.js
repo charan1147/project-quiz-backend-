@@ -4,6 +4,7 @@ import http from "http";
 import connectDB from "./config/db.js";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import morgan from "morgan";
 import authRoutes from "./routes/authRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import { initializeSocket } from "./sockets/socket.js";
@@ -15,40 +16,37 @@ const app = express();
 const server = http.createServer(app);
 initializeSocket(server);
 
-// ✅ SAFER origin checking without trailing slash
 const allowedOrigins = [
   "https://app-like-quiz.netlify.app",
   "http://localhost:5173"
 ];
 
-// ✅ CORS logging
 app.use((req, res, next) => {
-  console.log("🌐 Incoming request from:", req.headers.origin);
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   next();
 });
 
-// ✅ Use CORS before any route handlers
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.error("❌ CORS blocked for origin:", origin);
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  credentials: true,
+  origin: allowedOrigins,
+  credentials: true
 }));
 
-// ✅ Add these BEFORE routes
+app.use(morgan("dev"));
+
+
 app.use(express.json());
 app.use(cookieParser());
 
-// ✅ Use routes
+
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
-// ✅ Root route
 app.get("/", (req, res) => {
   res.send("Quiz App API & WebSocket server is running...");
 });
