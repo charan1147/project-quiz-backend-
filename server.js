@@ -15,33 +15,40 @@ const app = express();
 const server = http.createServer(app);
 initializeSocket(server);
 
-app.use(express.json());
-app.use(cookieParser());
-
 const allowedOrigins = [
-  process.env.CLIENT_URL,
+  "https://app-like-quiz.netlify.app",
   "http://localhost:5173"
 ];
+
+app.use((req, res, next) => {
+  console.log(" Incoming request from:", req.headers.origin);
+  next();
+});
 
 app.use(cors({
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.error(" CORS blocked for origin:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
 }));
 
+app.options("*", cors());
+
+app.use(express.json());
+app.use(cookieParser());
 app.use("/api/auth", authRoutes);
 app.use("/api/quiz", quizRoutes);
 
 app.get("/", (req, res) => {
-  res.send(" Quiz App API & WebSocket server is running...");
+  res.send("Quiz App API & WebSocket server is running...");
 });
 
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(` Server listening on http://localhost:${PORT}`);
+  console.log(`Server listening on http://localhost:${PORT}`);
 });

@@ -7,11 +7,23 @@ dotenv.config();
 const API_KEY = process.env.QUIZ_API_KEY;
 const BASE_URL = "https://quizapi.io/api/v1/questions";
 
+
+const allowedOrigins = [
+  "https://app-like-quiz.netlify.app",
+  "http://localhost:5173"
+];
+
 export const initializeSocket = (server) => {
   const io = new Server(server, {
     cors: {
-      origin: process.env.CLIENT_URL,
-      methods: ["GET", "POST"],
+      origin: (origin, callback) => {
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          console.error(" Socket.IO CORS blocked for origin:", origin);
+          callback(new Error("Not allowed by Socket.IO CORS"));
+        }
+      },
       credentials: true,
     },
   });
