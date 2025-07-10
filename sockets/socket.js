@@ -7,7 +7,6 @@ dotenv.config();
 const API_KEY = process.env.QUIZ_API_KEY;
 const BASE_URL = "https://quizapi.io/api/v1/questions";
 
-
 const allowedOrigins = [
   "https://app-like-quiz.netlify.app",
   "http://localhost:5173"

@@ -1,4 +1,3 @@
-// 📁 controller/userController.js
 import bcrypt from "bcryptjs";
 import { generateToken, verifyToken } from "../config/token.js";
 import User from "../models/userModel.js";
@@ -28,32 +27,28 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   const { identifier, password } = req.body;
   console.log("🔑 Login request for:", identifier);
-
   try {
     const user = await User.findOne({
       $or: [{ username: identifier }, { email: identifier }],
     });
-
     if (!user) {
-      console.log("❌ User not found");
+      console.log("❌ User not found for identifier:", identifier);
       return res.status(401).json({ message: "Invalid username/email or password" });
     }
-
+    console.log("User found:", user.username, user.email);
     const passwordMatch = await bcrypt.compare(password, user.password);
     if (!passwordMatch) {
-      console.log("❌ Incorrect password");
+      console.log("❌ Incorrect password for user:", identifier);
       return res.status(401).json({ message: "Invalid username/email or password" });
     }
-
     console.log("✅ Credentials valid, generating token...");
     generateToken(user, res);
     res.status(200).json({ message: "Login successful" });
   } catch (error) {
-    console.error(" Login error:", error);
+    console.error(" Login error:", error.message);
     res.status(500).json({ message: "Login failed" });
   }
 };
-
 
 export const logout = async (req, res) => {
   try {

@@ -3,13 +3,22 @@ import Match from "../models/matchModel.js";
 
 export const getQuestions = async (req, res) => {
   try {
-    const response = await axios.get("https://opentdb.com/api.php?amount=5&type=multiple");
-    const questions = response.data.results.map(q => ({
-      ...q,
+    const response = await axios.get("https://quizapi.io/api/v1/questions", {
+      params: {
+        apiKey: process.env.QUIZ_API_KEY,
+        limit: 5,
+        type: "multiple",
+      },
+    });
+    const questions = response.data.map(q => ({
+      question: q.question,
+      options: Object.values(q.answers).filter(Boolean).sort(() => Math.random() - 0.5),
+      correct_answer: Object.keys(q.correct_answers).find(k => q.correct_answers[k] === "true").replace("_correct", ""),
       timer: 15,
     }));
     res.status(200).json(questions);
   } catch (error) {
+    console.error("Fetch questions error:", error.message);
     res.status(500).json({ message: "Failed to fetch questions" });
   }
 };
