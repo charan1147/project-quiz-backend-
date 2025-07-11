@@ -9,11 +9,12 @@ export const generateToken = (user, res) => {
   );
   res.setHeader("Set-Cookie", cookie.serialize("jwt", token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "none",
-    maxAge: 60 * 60 * 24,
+    secure: true,             
+    sameSite: "none",       
+    maxAge: 60 * 60 * 24,     
     path: "/",
   }));
+  
   return token;
 };
 
