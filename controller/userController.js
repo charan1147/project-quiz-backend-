@@ -25,28 +25,31 @@ export const register = async (req, res) => {
 };
 
 export const login = async (req, res) => {
-  const { identifier, password } = req.body;
-  console.log("🔑 Login request for:", identifier);
+  console.log("📥 Login attempt body:", req.body);
   try {
+    const { identifier, password } = req.body;
     const user = await User.findOne({
       $or: [{ username: identifier }, { email: identifier }],
     });
+
     if (!user) {
-      console.log("❌ User not found for identifier:", identifier);
-      return res.status(401).json({ message: "Invalid username/email or password" });
+      console.log("❌ No user found for identifier:", identifier);
+      return res.status(401).json({ message: "Invalid credentials" });
     }
-    console.log("User found:", user.username, user.email);
-    const passwordMatch = await bcrypt.compare(password, user.password);
-    if (!passwordMatch) {
-      console.log("❌ Incorrect password for user:", identifier);
-      return res.status(401).json({ message: "Invalid username/email or password" });
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      console.log("❌ Password mismatch for user:", identifier);
+      return res.status(401).json({ message: "password is wrong" });
     }
-    console.log("✅ Credentials valid, generating token...");
+
+    console.log("✅ Login successful, generating token for:", user.username);
     generateToken(user, res);
     res.status(200).json({ message: "Login successful" });
+
   } catch (error) {
-    console.error(" Login error:", error.message);
-    res.status(500).json({ message: "Login failed" });
+    console.error("❌ Login error:", error.message);
+    res.status(500).json({ message: "Server error" });
   }
 };
 
@@ -67,14 +70,34 @@ export const logout = async (req, res) => {
 
 export const profile = async (req, res) => {
   try {
+    console.log("📬 Headers received:", req.headers);
+
     const cookies = cookie.parse(req.headers.cookie || "");
+    console.log("🍪 Parsed cookies:", cookies);
+
     const token = cookies.jwt;
-    if (!token) return res.status(401).json({ message: "No token provided" });
+    if (!token) {
+      console.log("❌ No token found in cookies");
+      return res.status(401).json({ message: "No token provided" });
+    }
+
     const decoded = verifyToken(token);
+    console.log("🔐 Decoded token:", decoded);
+
     const user = await User.findById(decoded.id).select("-password");
-    if (!user) return res.status(404).json({ message: "User not found" });
-    res.status(200).json({ username: user.username, email: user.email, createdAt: user.createdAt });
+    if (!user) {
+      console.log("❌ User not found for ID:", decoded.id);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    console.log("✅ Profile fetched for:", user.username);
+    res.status(200).json({
+      username: user.username,
+      email: user.email,
+      createdAt: user.createdAt,
+    });
   } catch (error) {
-    res.status(401).json({ message: "Invalid or expired token" });
+    console.error("❌ Profile fetch error:", error.message);
+    return res.status(401).json({ message: "Invalid or expired token" });
   }
 };

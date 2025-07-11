@@ -1,15 +1,22 @@
-import cookie from "cookie";
-import { verifyToken } from "../config/token.js";
 export const auth = (req, res, next) => {
+  const cookies = req.headers.cookie;
+  console.log("🍪 Incoming cookies:", cookies);
+
+  if (!cookies) return res.status(401).json({ message: "No cookies found" });
+
+  const token = cookie.parse(cookies).jwt;
+  if (!token) {
+    console.log("❌ No JWT token in cookies");
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
   try {
-    const cookies = cookie.parse(req?.headers?.cookie || "");
-    const token = cookies.jwt;
-    if (!token) return res.status(401).json({ message: "Not authenticated" });
-    const decoded = verifyToken(token);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log("✅ Token verified:", decoded);
     req.user = decoded;
     next();
-  } catch (error) {
-    res.status(401).json({ message: "Invalid or expired token" });
+  } catch (err) {
+    console.log("❌ Token verification failed:", err.message);
+    return res.status(401).json({ message: "Invalid token" });
   }
 };
-
