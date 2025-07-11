@@ -48,9 +48,9 @@ export const login = async (req, res) => {
     res.status(200).json({ message: "Login successful" });
 
   } catch (error) {
-    console.error("❌ Login error:", error.message);
-    res.status(500).json({ message: "Server error" });
-  }
+    console.error("❌ Login error (full):", error); // <-- log whole error object
+    res.status(500).json({ message: "Server error", error: error.message });
+  }  
 };
 
 
