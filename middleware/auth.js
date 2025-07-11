@@ -1,18 +1,15 @@
+import jwt from "jsonwebtoken";
+
 export const auth = (req, res, next) => {
-  const cookies = req.headers.cookie;
-  console.log("🍪 Incoming cookies:", cookies);
-
-  if (!cookies) return res.status(401).json({ message: "No cookies found" });
-
-  const token = cookie.parse(cookies).jwt;
-  if (!token) {
-    console.log("❌ No JWT token in cookies");
-    return res.status(401).json({ message: "Unauthorized" });
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ message: "Unauthorized - No token" });
   }
+
+  const token = authHeader.split(" ")[1];
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log("✅ Token verified:", decoded);
     req.user = decoded;
     next();
   } catch (err) {
