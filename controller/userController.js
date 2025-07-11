@@ -40,18 +40,19 @@ export const login = async (req, res) => {
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       console.log("❌ Password mismatch for user:", identifier);
-      return res.status(401).json({ message: "password is wrong" });
+      return res.status(401).json({ message: "Password is wrong" });
     }
 
     console.log("✅ Login successful, generating token for:", user.username);
     generateToken(user, res);
-    res.status(200).json({ message: "Login successful" });
+    return res.status(200).json({ message: "Login successful" });
 
   } catch (error) {
-    console.error("❌ Login error:", error.message);
-    res.status(500).json({ message: "Server error" });
+    console.error("❌ Login error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 export const logout = async (req, res) => {
   try {
